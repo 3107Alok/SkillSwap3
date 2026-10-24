@@ -60,6 +60,10 @@ final class AuthSession: ObservableObject {
         _ = try await Auth.auth().createUser(withEmail: email, password: password)
     }
 
+    func resetPassword(email: String) async throws {
+        try await Auth.auth().sendPasswordReset(withEmail: email)
+    }
+
     func devSignIn(name: String) {
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let uid = String(clean.lowercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) })
