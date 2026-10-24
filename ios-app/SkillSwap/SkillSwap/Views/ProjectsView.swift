@@ -1,13 +1,15 @@
 import SwiftUI
 
 /// "Projects" screen: displays projects with a warm cream, forest-green, and terracotta theme.
-/// Features a seamless watercolor illustrated empty state, custom tab pills, and responsive cards.
+/// Distinctly separates "My projects" (joined/created) from "Open projects" (discoverable with join action).
 struct ProjectsView: View {
     @State private var scope = "mine"
     @State private var projects: [ProjectSummary] = []
     @State private var error: String?
+    @State private var notice: String?
     @State private var creating = false
     @State private var loaded = false
+    @State private var joiningProject: ProjectSummary?
 
     var body: some View {
         NavigationStack {
@@ -34,6 +36,12 @@ struct ProjectsView: View {
                             // Segmented Filter Pill: "My projects" vs "Open projects"
                             segmentedFilterSection
                                 .padding(.bottom, 16)
+
+                            // Notice Banner (e.g. after successfully applying)
+                            if let notice = notice {
+                                noticeCard(notice)
+                                    .padding(.bottom, 14)
+                            }
 
                             // Error Banner (if any)
                             if let error = error {
@@ -67,6 +75,12 @@ struct ProjectsView: View {
             .sheet(isPresented: $creating, onDismiss: { Task { await load() } }) {
                 CreateProjectView()
             }
+            .sheet(item: $joiningProject) { project in
+                JoinProjectSheet(project: project) {
+                    notice = "Application submitted for \"\(project.title)\"! The leader has been notified."
+                    await load()
+                }
+            }
         }
     }
 
@@ -78,7 +92,7 @@ struct ProjectsView: View {
                     .font(.system(size: 28, weight: .bold, design: .serif))
                     .foregroundColor(Theme.forestGreen)
 
-                Text("Turn your ideas into reality\nwith the right people.")
+                Text(scope == "mine" ? "Manage and track the projects\nyou've joined or created." : "Discover open opportunities and\ncollaborate with the right people.")
                     .font(.system(size: 14, weight: .regular))
                     .foregroundColor(Theme.textSecondary)
                     .lineSpacing(2)
@@ -110,7 +124,7 @@ struct ProjectsView: View {
                 }
                 .frame(width: 44, height: 44)
 
-                // Forest Green Circular Plus Button
+                // Forest Green Circular Plus Button (Always active in both tabs)
                 Button {
                     creating = true
                 } label: {
@@ -134,9 +148,13 @@ struct ProjectsView: View {
     // MARK: - Segmented Filter Section
     private var segmentedFilterSection: some View {
         HStack(spacing: 0) {
+            // My Projects Button
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    scope = "mine"
+                if scope != "mine" {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        scope = "mine"
+                        notice = nil
+                    }
                 }
             } label: {
                 Text("My projects")
@@ -156,9 +174,13 @@ struct ProjectsView: View {
             }
             .buttonStyle(PlainButtonStyle())
 
+            // Open Projects Button
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    scope = "open"
+                if scope != "open" {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        scope = "open"
+                        notice = nil
+                    }
                 }
             } label: {
                 Text("Open projects")
@@ -186,7 +208,7 @@ struct ProjectsView: View {
         .padding(.horizontal, 20)
     }
 
-    // MARK: - Empty State Section
+    // MARK: - Distinct Empty State Section
     private func emptyStateSection(screenWidth: CGFloat) -> some View {
         VStack(spacing: 16) {
             Spacer(minLength: 16)
@@ -211,38 +233,116 @@ struct ProjectsView: View {
                 .frame(maxWidth: min(screenWidth * 0.74, 300))
                 .padding(.vertical, 4)
 
-            // Empty State Headings
-            VStack(spacing: 6) {
-                Text(scope == "mine" ? "You are not in a project yet." : "No open projects right now.")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(Theme.textPrimary)
+            if scope == "mine" {
+                // My Projects Empty State: Guides user to discover open projects or start their own
+                VStack(spacing: 6) {
+                    Text("You are not in a project yet")
+                        .font(.system(size: 19, weight: .bold))
+                        .foregroundColor(Theme.textPrimary)
 
-                Text(scope == "mine" ? "Tap + to start one." : "Be the first to start a project for others to join.")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundColor(Theme.textSecondary)
-            }
-
-            // "Create a Project" Pill Button
-            Button {
-                creating = true
-            } label: {
-                HStack(spacing: 8) {
-                    Text("Create a Project")
-                        .font(.system(size: 15, weight: .semibold))
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 13, weight: .semibold))
+                    Text("Discover open projects looking for your skills,\nor start your own project.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(Theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 30)
-                .frame(height: 48)
-                .background(
-                    Capsule()
-                        .fill(Theme.forestGreen)
-                )
-                .shadow(color: Theme.forestGreen.opacity(0.22), radius: 6, x: 0, y: 3)
+
+                VStack(spacing: 12) {
+                    // Primary Action: Explore Open Projects
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            scope = "open"
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("Discover Open Projects")
+                                .font(.system(size: 15, weight: .semibold))
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 28)
+                        .frame(height: 48)
+                        .background(
+                            Capsule()
+                                .fill(Theme.forestGreen)
+                        )
+                        .shadow(color: Theme.forestGreen.opacity(0.22), radius: 6, x: 0, y: 3)
+                    }
+                    .buttonStyle(ScalePressStyle())
+
+                    // Secondary Action: Create Project
+                    Button {
+                        creating = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Create a Project")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(Theme.forestGreen)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+                .padding(.top, 4)
+
+            } else {
+                // Open Projects Empty State: Informs user that no projects are currently open
+                VStack(spacing: 6) {
+                    Text("No open projects right now")
+                        .font(.system(size: 19, weight: .bold))
+                        .foregroundColor(Theme.textPrimary)
+
+                    Text("All current projects have filled their roles.\nCheck back soon or create your own.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(Theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+
+                VStack(spacing: 12) {
+                    // Primary Action: Refresh
+                    Button {
+                        Task { await load() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Refresh List")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 28)
+                        .frame(height: 48)
+                        .background(
+                            Capsule()
+                                .fill(Theme.forestGreen)
+                        )
+                        .shadow(color: Theme.forestGreen.opacity(0.22), radius: 6, x: 0, y: 3)
+                    }
+                    .buttonStyle(ScalePressStyle())
+
+                    // Secondary Action: Create Project
+                    Button {
+                        creating = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Start a New Project")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(Theme.forestGreen)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+                .padding(.top, 4)
             }
-            .buttonStyle(ScalePressStyle())
-            .padding(.top, 6)
 
             Spacer(minLength: 30)
         }
@@ -270,12 +370,40 @@ struct ProjectsView: View {
             .padding(.horizontal, 20)
 
             ForEach(projects) { project in
-                NavigationLink(destination: ProjectDetailView(projectId: project.id)) {
-                    ProjectCardView(project: project)
+                ProjectCardView(project: project, scope: scope) {
+                    joiningProject = project
                 }
-                .buttonStyle(PlainButtonStyle())
             }
         }
+    }
+
+    // MARK: - Notice Banner Card
+    private func noticeCard(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(Theme.forestGreen)
+            Text(message)
+                .font(.footnote.weight(.medium))
+                .foregroundColor(Theme.forestGreenDark)
+            Spacer()
+            Button {
+                withAnimation { notice = nil }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(Theme.textSecondary)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Theme.forestGreenPill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Theme.forestGreenBorder, lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Error Card
@@ -321,6 +449,8 @@ struct ProjectsView: View {
 // MARK: - Dedicated Project Card for the Projects Feed
 struct ProjectCardView: View {
     let project: ProjectSummary
+    let scope: String
+    let onJoin: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -342,14 +472,30 @@ struct ProjectCardView: View {
                         .background(Theme.forestGreenLight)
                         .clipShape(Capsule())
                 } else if project.isMember {
-                    Text("Member")
+                    Text(scope == "mine" ? "Member" : "Joined ✓")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Theme.terracottaDark)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
                         .background(Theme.terracottaLight)
                         .clipShape(Capsule())
+                } else if scope == "open" {
+                    Text("Open to Join")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Theme.forestGreen)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Theme.forestGreenPill)
+                        .clipShape(Capsule())
                 }
+            }
+
+            // Description Snippet (especially helpful in Open Projects to discover what it is)
+            if !project.description.isEmpty {
+                Text(project.description)
+                    .font(.system(size: 13))
+                    .foregroundColor(Theme.textSecondary)
+                    .lineLimit(2)
             }
 
             // Leader & Members Row
@@ -373,7 +519,7 @@ struct ProjectCardView: View {
                 }
             }
 
-            // Milestones Progress Bar
+            // Milestones Progress Bar (Shown in My Projects, or if Milestones exist)
             if project.milestonesTotal > 0 {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
@@ -401,10 +547,10 @@ struct ProjectCardView: View {
                 }
             }
 
-            // Open Needs / Looking For
+            // Open Needs / Looking For Roles
             if !project.openNeeds.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Looking for:")
+                    Text(scope == "open" ? "Roles available:" : "Looking for:")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Theme.textMuted)
 
@@ -424,15 +570,63 @@ struct ProjectCardView: View {
                 }
             }
 
-            // Footer with chevron
+            // Footer Actions: Differentiated between My Projects and Open Projects
             HStack {
-                Text("View Project Details")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Theme.forestGreen)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(Theme.forestGreen)
-                Spacer()
+                if scope == "open" && !project.isMember {
+                    // Direct "Join Project" Action in Open Projects
+                    Button {
+                        onJoin()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 11))
+                            Text("Join Project")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Theme.forestGreen)
+                        )
+                        .shadow(color: Theme.forestGreen.opacity(0.2), radius: 4, x: 0, y: 2)
+                    }
+                    .buttonStyle(ScalePressStyle())
+
+                    Spacer()
+
+                    // Navigation to full detail
+                    NavigationLink(destination: ProjectDetailView(projectId: project.id)) {
+                        HStack(spacing: 4) {
+                            Text("Details")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(Theme.forestGreen)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(Theme.forestGreen)
+                        }
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                } else {
+                    // Standard navigation for My Projects
+                    NavigationLink(destination: ProjectDetailView(projectId: project.id)) {
+                        HStack {
+                            Text(scope == "mine" ? "Manage Project" : "View Project Details")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(Theme.forestGreen)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(Theme.forestGreen)
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
             .padding(.top, 2)
         }
@@ -447,5 +641,233 @@ struct ProjectCardView: View {
                 .shadow(color: Theme.shadow, radius: 8, x: 0, y: 3)
         )
         .padding(.horizontal, 20)
+    }
+}
+
+// MARK: - Join / Apply Project Sheet
+struct JoinProjectSheet: View {
+    let project: ProjectSummary
+    let onApplied: () async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var message = ""
+    @State private var selectedNeedIndex: Int? = nil
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.creamBackground
+                    .ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Project Overview Card
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(project.title)
+                                    .font(.system(size: 20, weight: .bold, design: .serif))
+                                    .foregroundColor(Theme.textPrimary)
+                                Spacer()
+                                Text("Open")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Theme.forestGreen)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Theme.forestGreenPill)
+                                    .clipShape(Capsule())
+                            }
+
+                            HStack(spacing: 12) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "person.circle.fill")
+                                        .foregroundColor(Theme.forestGreen)
+                                        .font(.system(size: 12))
+                                    Text("Led by \(project.leaderName)")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Theme.textSecondary)
+                                }
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "person.2.fill")
+                                        .foregroundColor(Theme.textMuted)
+                                        .font(.system(size: 12))
+                                    Text("\(project.members) member\(project.members == 1 ? "" : "s")")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Theme.textSecondary)
+                                }
+                            }
+
+                            if !project.description.isEmpty {
+                                Text(project.description)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Theme.textSecondary)
+                                    .lineSpacing(2)
+                                    .padding(.top, 2)
+                            }
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(Theme.creamCard)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .stroke(Theme.cardBorder, lineWidth: 1)
+                                )
+                        )
+
+                        // Role Selection (if project has specific open needs)
+                        if !project.openNeeds.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Select Role to Apply For")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(Theme.forestGreen)
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        // General Contributor Option
+                                        Button {
+                                            selectedNeedIndex = nil
+                                        } label: {
+                                            Text("General Contributor")
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .foregroundColor(selectedNeedIndex == nil ? .white : Theme.textPrimary)
+                                                .padding(.horizontal, 14)
+                                                .padding(.vertical, 8)
+                                                .background(
+                                                    Capsule()
+                                                        .fill(selectedNeedIndex == nil ? Theme.forestGreen : Theme.creamCard)
+                                                )
+                                                .overlay(
+                                                    Capsule()
+                                                        .stroke(selectedNeedIndex == nil ? Color.clear : Theme.cardBorder, lineWidth: 1)
+                                                )
+                                        }
+
+                                        // Specific Roles from the project
+                                        ForEach(Array(project.openNeeds.enumerated()), id: \.offset) { index, role in
+                                            Button {
+                                                selectedNeedIndex = index
+                                            } label: {
+                                                Text(role)
+                                                    .font(.system(size: 12, weight: .semibold))
+                                                    .foregroundColor(selectedNeedIndex == index ? .white : Theme.textPrimary)
+                                                    .padding(.horizontal, 14)
+                                                    .padding(.vertical, 8)
+                                                    .background(
+                                                        Capsule()
+                                                            .fill(selectedNeedIndex == index ? Theme.forestGreen : Theme.creamCard)
+                                                    )
+                                                    .overlay(
+                                                        Capsule()
+                                                            .stroke(selectedNeedIndex == index ? Color.clear : Theme.cardBorder, lineWidth: 1)
+                                                    )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Message Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Note to Project Leader (Optional)")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(Theme.forestGreen)
+
+                            TextField("Why do you want to join? (e.g. skills you can offer)", text: $message, axis: .vertical)
+                                .lineLimit(3...5)
+                                .font(.system(size: 14))
+                                .foregroundColor(Theme.textPrimary)
+                                .padding(14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(Theme.creamCard)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14)
+                                                .stroke(Theme.cardBorder, lineWidth: 1)
+                                        )
+                                )
+                        }
+
+                        // Error Banner if any
+                        if let error = error {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(Theme.terracotta)
+                                Text(error)
+                                    .font(.footnote)
+                                    .foregroundColor(Theme.textPrimary)
+                            }
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Theme.terracottaLight)
+                            )
+                        }
+
+                        // Submit Application Button
+                        Button {
+                            submit()
+                        } label: {
+                            HStack(spacing: 8) {
+                                if busy {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                }
+                                Text(busy ? "Sending Application..." : "Submit Join Request")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Image(systemName: "paperplane.fill")
+                                    .font(.system(size: 13))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(
+                                Capsule()
+                                    .fill(Theme.forestGreen)
+                            )
+                            .shadow(color: Theme.forestGreen.opacity(0.25), radius: 6, x: 0, y: 3)
+                            .opacity(busy ? 0.6 : 1.0)
+                        }
+                        .disabled(busy)
+                        .padding(.top, 4)
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle("Join Project")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Theme.forestGreen)
+                }
+            }
+        }
+    }
+
+    private func submit() {
+        busy = true
+        error = nil
+        Task {
+            do {
+                var body: [String: Any] = ["message": message]
+                if let index = selectedNeedIndex {
+                    body["need_index"] = index
+                }
+                let _: OkResponse = try await API.shared.post("/api/projects/\(project.id)/apply", body: body)
+                await onApplied()
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+                self.busy = false
+            }
+        }
     }
 }
